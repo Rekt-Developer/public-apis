@@ -1,0 +1,89 @@
+name: Public API Validation
+
+on:
+  schedule:
+    # Runs every 12 hours
+    - cron: '0 */12 * * *'
+  workflow_dispatch:  # Allows manual triggering from GitHub UI
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: 'validation'
+      cancel-in-progress: true  # Ensure only one run is active at any time
+
+    steps:
+      # Checkout the repository
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      # Set up Python environment
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.9
+
+      # Cache dependencies to speed up builds
+      - name: Cache Python dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/pip
+            scripts/.venv
+          key: ${{ runner.os }}-python-${{ hashFiles('scripts/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-python-
+
+      # Install dependencies from requirements.txt
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r scripts/requirements.txt
+
+      # Run format validation on README.md
+      - name: Run Format Validation
+        run: |
+          python scripts/validate/format.py README.md
+
+      # Run link validation on README.md
+      - name: Run Link Validation
+        run: |
+          python scripts/validate/links.py README.md
+
+      # Run unit tests for format and links
+      - name: Run Unit Tests
+        run: |
+          cd scripts
+          python -m unittest discover tests/ --verbose
+
+      # Commit changes if any (e.g., format corrections or updates to links)
+      - name: Commit and Push Changes if Any
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+
+          # Check if there are any changes (e.g., formatting or link fixes)
+          if [[ `git status --porcelain` ]]; then
+            git add .
+            git commit -m "Automated updates from API validation"
+            git push
+          else
+            echo "No changes to commit."
+          fi
+
+      # Slack Notification (notify on failure or specific condition)
+      - name: Send Slack Notification if Validation Fails
+        if: failure()  # Only runs on failure
+        uses: rtCamp/action-slack-notify@v2
+        with:
+          webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
+          message: "API Validation failed! Please check the logs for more details."
+          channel: "#general"
+          username: "GitHub Actions"
+          icon_emoji: ":warning:"
+
+      # Completion message
+      - name: Completion Notification
+        run: |
+          echo "API Validation completed successfully!"
