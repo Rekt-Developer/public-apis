@@ -72,17 +72,6 @@ jobs:
             echo "No changes to commit."
           fi
 
-      # Slack Notification (notify on failure or specific condition)
-      - name: Send Slack Notification if Validation Fails
-        if: failure()  # Only runs on failure
-        uses: rtCamp/action-slack-notify@v2
-        with:
-          webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
-          message: "API Validation failed! Please check the logs for more details."
-          channel: "#general"
-          username: "GitHub Actions"
-          icon_emoji: ":warning:"
-
       # Completion message
       - name: Completion Notification
         run: |
